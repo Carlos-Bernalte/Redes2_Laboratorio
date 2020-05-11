@@ -1,21 +1,27 @@
 from socket import *
 import sys
 import traceback
+import struct
+import hashlib
+import base64
+import codecs
 
-
+#SERVIDORES
 reto0=("node1",2000)
 reto1=("node1",3000)
 reto2=("node1",4000)
 reto3=("node1",5001)
+reto4=("node1",10001)
+reto5=("node1",7001)
+
 
 lista_sockets=[]
 
 def comprobar_respuesta(sock):
     resp=sock.recv(2048).decode()
-    if resp[0]== "c":
-        return resp
-    else:
-        return comprobar_respuesta(sock)
+    if resp[0:5]== "code:": return resp   
+    else: return comprobar_respuesta(sock)
+        
 
 def Reto_0():
     sock_reto0= socket(AF_INET, SOCK_STREAM)
@@ -89,9 +95,80 @@ def Reto_3(identificador3):
     sock_reto3.close()
     return resp_reto3[5:41]
 
+#______________________________________RETO 4__________________________________#
+def Reto_4(identificador4):
+    sock_reto4= socket(AF_INET, SOCK_STREAM)
+    sock_reto4.connect(reto4)
+    lista_sockets.append(sock_reto4)
+
+    sock_reto4.send((identificador4).encode())
+    Total_size4=""
+    while 1:
+        msg4=sock_reto4.recv(1).decode()
+        if msg4==":":
+            break
+        else:
+            Total_size4=Total_size4+str(msg4)
+
+    archivo=b''
+    while 1:
+        archivo_parte=sock_reto4.recv(2048)
+        archivo=archivo+archivo_parte
+        if len(archivo)==int(Total_size4):
+            sha1 = hashlib.sha1(archivo)
+            break
+    
+    sock_reto4.send(sha1.digest())
+    resp_reto4=comprobar_respuesta(sock_reto4)
+    print(resp_reto4)
+    sock_reto4.close()
+    return resp_reto4[5:41]
+
+def sum16(data):
+    if len(data) % 2:
+        data = b'\0' + data
+
+    return sum(struct.unpack('!%sH' % (len(data) // 2), data))
+
+
+def cksum(data):
+    sum_as_16b_words  = sum16(data)
+    sum_1s_complement = sum16(struct.pack('!L', sum_as_16b_words))
+    _1s_complement    = ~sum_1s_complement & 0xffff
+    return _1s_complement
+
+#______________________________________RETO 5__________________________________#
+def Reto_5(identificador5):
+    sock_reto5= socket(AF_INET, SOCK_DGRAM)
+    lista_sockets.append(sock_reto5)
+    request_=b'WYP\x00\x00\x00\x00\x00'+base64.b64encode(identificador5.encode())
+    
+    checksum=cksum(request_)
+
+    request=struct.pack("!3sbHH"+str(len(base64.b64encode(identificador5.encode())))+"s",b'WYP',0,0,checksum,base64.b64encode(identificador5.encode()))
+    sock_reto5.sendto(request,reto5)
+    reply=sock_reto5.recvfrom(5000)[0]
+
+    payload=struct.unpack("!"+str(len(reply[8:]))+"s",reply[8:])
+    resp_reto5=base64.b64decode(payload[0]).decode()
+    
+    print(resp_reto5)
+   
+    sock_reto5.close()
+    return resp_reto5[5:41]
+
+def Reto_6(identificador5):
+    sock_reto6= socket(AF_INET, SOCK_STREAM)
+    sock_reto6.close()
+
 def main():
-    Reto_3(Reto_2(Reto_1(Reto_0())))
- 
+    identificador=Reto_0()
+    identificador=Reto_1(identificador)
+    identificador=Reto_2(identificador)
+    identificador=Reto_3(identificador)
+    identificador=Reto_4(identificador)
+    identificador=Reto_5(identificador)
+    Reto_6(identificador)
 
 if __name__ == '__main__':
     try:
@@ -107,5 +184,7 @@ if __name__ == '__main__':
         
         for sock in lista_sockets:
             sock.close()
-        
+
+
+
 
